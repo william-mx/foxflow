@@ -16,7 +16,7 @@ dependencies = [
   "numpy",
   "tqdm",
   "requests",
-  "foxglove-data-platform",
+  "foxglove-client",
   "mcap-protobuf-support",
   "mcap-ros2-support",
   "mcap-ros1-support",

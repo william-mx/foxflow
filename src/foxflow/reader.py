@@ -1,6 +1,6 @@
 # foxflow/reader.py
 from __future__ import annotations
-from foxglove_data_platform.client import Client
+from foxglove.client import Client
 import pandas as pd
 import requests
 
