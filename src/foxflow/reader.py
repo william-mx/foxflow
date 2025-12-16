@@ -6,8 +6,14 @@ import requests
 
 from foxflow.parsers import load_plugins
 from foxflow.registry import get_parser, list_schemas
+from foxflow.utils import get_timestamp_ns
 
 import numpy as np
+
+
+def iter_with_timestamp(message_iter):
+    for item in message_iter:
+        yield get_timestamp_ns(item), item
 
 class BagfileReader:
     def __init__(self, api_key: str):
@@ -79,26 +85,31 @@ class BagfileReader:
 
         return df
 
+
     def read_topic(self, topic: str, **kwargs):
         """Return parsed data for a topic using the registered parser for its schema."""
         if topic not in self.mapping:
             raise ValueError(f"Topic '{topic}' not found in recording.")
 
-        # ROS 1: sensor_msgs/Imu
-        # ROS 2: sensor_msgs/msg/Imu
+        # Normalize schema (ROS1 vs ROS2)
         schema = self.mapping[topic].replace("/msg/", "/")
-
         parser = get_parser(schema)
 
-        messages_iter = self.client.get_messages(
+        raw_iter = self.client.iter_messages(
             device_id=self.device_id,
             start=self.start,
             end=self.end,
             topics=[topic],
         )
 
+        messages_iter = iter_with_timestamp(raw_iter)
+
         result = parser(messages_iter, **kwargs)
-        return tuple(result.values())
+
+        values = tuple(result.values())
+
+        return values[0] if len(values) == 1 else values
+
 
     def read_events(self, topic: str, **kwargs):
         if topic not in self.mapping:
@@ -116,15 +127,17 @@ class BagfileReader:
         results = {}
 
         for evt in events:
-            messages_iter = self.client.get_messages(
+            raw_iter = self.client.iter_messages(
                 device_id=self.device_id,
                 start=evt["start"],
                 end=evt["end"],
                 topics=[topic],
             )
 
-            parsed = parser(messages_iter, **kwargs)
+            messages_iter = iter_with_timestamp(raw_iter)
+
             # parsed is ALWAYS a dict: {"df": df, ...}
+            parsed = parser(messages_iter, **kwargs)
 
             results[evt["id"]] = {
                 "event": evt,
