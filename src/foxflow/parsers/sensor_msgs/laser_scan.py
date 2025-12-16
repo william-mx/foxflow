@@ -2,26 +2,24 @@
 
 import pandas as pd
 from foxflow.registry import register
-from foxflow.utils import get_timestamp_ns
 
 @register("sensor_msgs/LaserScan")
-def parse(messages):
+def parse(message_iter):
     rows = []
-
-    for topic, record, msg in messages:
-        t_ns = get_timestamp_ns(record, msg)
+    
+    for t_ns, (schema, channel, mcap_message, ros_message) in message_iter:
 
         rows.append({
             "timestamp_ns": t_ns,
-            "angle_min": msg.angle_min,
-            "angle_max": msg.angle_max,
-            "angle_increment": msg.angle_increment,
-            "time_increment": msg.time_increment,
-            "scan_time": msg.scan_time,
-            "range_min": msg.range_min,
-            "range_max": msg.range_max,
-            "ranges": msg.ranges,
-            "intensities": msg.intensities,
+            "angle_min": ros_message.angle_min,
+            "angle_max": ros_message.angle_max,
+            "angle_increment": ros_message.angle_increment,
+            "time_increment": ros_message.time_increment,
+            "scan_time": ros_message.scan_time,
+            "range_min": ros_message.range_min,
+            "range_max": ros_message.range_max,
+            "ranges": ros_message.ranges,
+            "intensities": ros_message.intensities,
         })
 
     return {"df": pd.DataFrame(rows)}
