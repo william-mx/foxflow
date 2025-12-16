@@ -6,14 +6,13 @@ import cv2
 from typing import Iterable, Tuple, Any
 
 from foxflow.registry import register
-from foxflow.utils import get_timestamp_ns
 from foxflow.utils import decode_ros_image, decode_jpeg
 
 
 @register("sensor_msgs/Image")
 @register("sensor_msgs/CompressedImage")
 def parse_image(
-    messages: Iterable[Tuple[str, Any, Any]],
+    message_iter: Iterable[Tuple[Any, Any, Any, Any]],
     *,
     export: bool = False,
     export_dir: str | None = None,
@@ -27,16 +26,15 @@ def parse_image(
             raise ValueError("export_dir must be provided if export=True")
         os.makedirs(export_dir, exist_ok=True)
 
-    for i, (topic, record, msg) in enumerate(messages):
-        t_ns = get_timestamp_ns(record, msg)
+    for t_ns, (schema, channel, mcap_message, ros_message) in message_iter:
 
         rows.append({"timestamp_ns": t_ns})
 
         if export or return_images:
-            if msg.__class__.__name__ == "CompressedImage":
-                img, _ = decode_jpeg(record.data)
+            if ros_message.__class__.__name__ == "CompressedImage":
+                img = decode_jpeg(ros_message)
             else:
-                img = decode_ros_image(msg)
+                img = decode_ros_image(ros_message)
 
             if return_images:
                 images.append(img)
@@ -45,5 +43,4 @@ def parse_image(
                 path = os.path.join(export_dir, f"{t_ns}.jpg")
                 cv2.imwrite(path, img)
 
-    return {'df': pd.DataFrame(rows), 'images': images}
-
+    return {"df": pd.DataFrame(rows), "images": images}
