@@ -1,24 +1,22 @@
-def get_timestamp_ns(record, msg) -> int:
-    """
-    Return timestamp in nanoseconds.
+# foxflow/utils/time.py
 
-    Priority:
-    1) msg.header.stamp (ROS1 / ROS2)
-    2) record.publish_time (MCAP fallback)
-    """
-    # 1) Try ROS header stamp
-    if msg is not None and hasattr(msg, "header"):
-        stamp = getattr(msg.header, "stamp", None)
+def get_timestamp_ns(item) -> int:
+    schema, channel, message, decoded_message = item  # len == 4
+
+    # 1) ROS header stamp (if available)
+    header = getattr(decoded_message, "header", None)
+    if header is not None:
+        stamp = getattr(header, "stamp", None)
         if stamp is not None:
-            # ROS1
-            if hasattr(stamp, "secs"):
-                return int(stamp.secs * 1e9 + stamp.nsecs)
-            # ROS2
-            if hasattr(stamp, "sec"):
-                return int(stamp.sec * 1e9 + stamp.nanosec)
+            if hasattr(stamp, "secs"):  # ROS1
+                return int(stamp.secs * 1_000_000_000 + stamp.nsecs)
+            if hasattr(stamp, "sec"):  # ROS2
+                return int(stamp.sec * 1_000_000_000 + stamp.nanosec)
 
-    # 2) Fallback: MCAP publish_time
-    if record is not None and hasattr(record, "publish_time"):
-        return int(record.publish_time)
+    # 2) MCAP message time
+    if hasattr(message, "log_time"):
+        return int(message.log_time)
+    if hasattr(message, "publish_time"):
+        return int(message.publish_time)
 
-    raise ValueError("No valid timestamp source found")
+    raise ValueError("No valid timestamp found")
