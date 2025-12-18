@@ -16,20 +16,19 @@ _ARRAYS = [
     "std_msgs/UInt64MultiArray",
 ]
 
-def _parse_std_multiarray(messages):
+def _parse_std_multiarray(message_iter):
     rows = []
-    for topic, record, msg in messages:
-        t_ns = getattr(record, "publish_time", None)
-        dims = []
+    for t_ns, (schema, channel, mcap_message, ros_message) in message_iter:
+
         try:
-            dims = [d.size for d in msg.layout.dim]  # may be empty
+            dims = [d.size for d in ros_message.layout.dim]
         except Exception:
             dims = []
 
         rows.append({
             "timestamp_ns": t_ns,
-            "data": list(msg.data),  # flat
-            "dims": dims,            # optional: helps reconstruct later
+            "data": list(ros_message.data),  # flat
+            "dims": dims,                    # optional: helps reconstruct later
         })
     return {"df": pd.DataFrame(rows)}
 

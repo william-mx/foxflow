@@ -19,15 +19,10 @@ _SCALARS = [
     "std_msgs/String",
 ]
 
-def _parse_std_scalar(messages):
+def _parse_std_scalar(message_iter):
     rows = []
-    for topic, record, msg in messages:
-        # prefer MCAP publish_time if available (ns), else fallback
-        t_ns = getattr(record, "publish_time", None)
-        if t_ns is None:
-            # last-resort: no timestamp found
-            t_ns = None
-        rows.append({"timestamp_ns": t_ns, "data": msg.data})
+    for t_ns, (schema, channel, mcap_message, ros_message) in message_iter:
+        rows.append({"timestamp_ns": t_ns, "data": ros_message.data})
     return {"df": pd.DataFrame(rows)}
 
 for schema in _SCALARS:
