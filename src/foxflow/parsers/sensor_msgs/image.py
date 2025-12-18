@@ -31,7 +31,7 @@ def parse_image(
         rows.append({"timestamp_ns": t_ns})
 
         if export or return_images:
-            if ros_message.__class__.__name__ == "CompressedImage":
+            if "CompressedImage" in schema.name:
                 img = decode_jpeg(ros_message)
             else:
                 img = decode_ros_image(ros_message)
