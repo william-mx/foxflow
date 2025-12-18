@@ -21,7 +21,8 @@ dependencies = [
   "mcap-ros2-support",
   "mcap-ros1-support",
   "duckdb",
-  "opencv-python-headless"
+  "opencv-python-headless",
+  "pyarrow"
 ]
 
 [project.optional-dependencies]
