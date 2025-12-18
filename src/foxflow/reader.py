@@ -40,6 +40,8 @@ class BagfileReader:
             if e.response is not None and e.response.status_code == 401:
                 raise ValueError("Invalid API key") from e
             raise
+        
+        self.recordings_by_id = {v: k for k, v in self.recordings.items()}
 
     def print_recordings(self):
         print("Available Recordings:\n")
@@ -75,6 +77,7 @@ class BagfileReader:
         if not rec.get("device"):
             raise ValueError("Recording must be assigned to a device before import.")
 
+        self.recording_name = self.recordings_by_id[recording_id]
         self.recording_id = recording_id
         self.device_id = rec["device"]["id"]
         self.start = rec["start"]
@@ -206,6 +209,28 @@ class BagfileReader:
 
 
         return out_dir
+
+    def __repr__(self) -> str:
+        if not hasattr(self, "recording_id") or self.recording_id is None:
+            return (
+                f"BagfileReader("
+                f"recordings={len(self.recordings)} available, "
+                f"no recording selected)"
+            )
+
+        parts = [
+            f"recording='{self.recording_name}'",
+            f"id='{self.recording_id}'",
+            f"device_id='{self.device_id}'",
+        ]
+
+        if getattr(self, "start", None) is not None and getattr(self, "end", None) is not None:
+            parts.append(f"time=[{self.start} → {self.end}]")
+
+        if self.mapping:
+            parts.append(f"topics={len(self.mapping)}")
+
+        return f"BagfileReader({', '.join(parts)})"
 
 
 
