@@ -3,12 +3,16 @@ from __future__ import annotations
 from foxglove.client import Client
 import pandas as pd
 import requests
+import os
+from tqdm import tqdm
+import shutil
 
 from foxflow.parsers import load_plugins
 from foxflow.registry import get_parser, list_schemas
-from foxflow.utils import get_timestamp_ns
+from foxflow.utils import get_timestamp_ns, _safe_topic_name
+from foxflow.parsers.generic import parse_generic
 
-import numpy as np
+
 
 
 def iter_with_timestamp(message_iter):
@@ -86,6 +90,13 @@ class BagfileReader:
         return df
 
 
+    def _get_parser(self, schema):
+        try:
+            return get_parser(schema)
+        except KeyError:
+            return parse_generic
+
+    
     def read_topic(self, topic: str, **kwargs):
         """Return parsed data for a topic using the registered parser for its schema."""
         if topic not in self.mapping:
@@ -93,7 +104,7 @@ class BagfileReader:
 
         # Normalize schema (ROS1 vs ROS2)
         schema = self.mapping[topic].replace("/msg/", "/")
-        parser = get_parser(schema)
+        parser = self._get_parser(schema)
 
         raw_iter = self.client.iter_messages(
             device_id=self.device_id,
@@ -116,7 +127,7 @@ class BagfileReader:
             raise ValueError(f"Topic '{topic}' not found in recording.")
 
         schema = self.mapping[topic].replace("/msg/", "/")
-        parser = get_parser(schema)
+        parser = self._get_parser(schema)
 
         events = self.client.get_events(
             device_id=self.device_id,
@@ -149,3 +160,52 @@ class BagfileReader:
 
     def get_events(self):
         return self.client.get_events(device_id=self.device_id, start=self.start, end=self.end)
+
+
+    def export_bagfile(
+        self,
+        out_dir: str,
+        *,
+        df_format: str = "parquet",
+        export_assets: bool = True,
+    ):
+        """
+        Exports all topics:
+        - saves each parser's df to out_dir
+        - optionally exports extra assets via the parser (e.g. images)
+        - optionally returns extra assets in a dict keyed by topic
+        """
+        out_dir = os.path.join(out_dir, self.recording_id)
+        if os.path.isdir(out_dir):
+            shutil.rmtree(out_dir)
+
+        os.makedirs(out_dir, exist_ok=True)
+
+
+        for topic, schema in tqdm(self.mapping.items()):
+            tqdm.write(f"Processing {topic}")
+            schema = schema.replace("/msg/", "/")
+            topic_name = _safe_topic_name(topic)
+
+
+            kwargs = {}
+            if schema in ("sensor_msgs/Image", "sensor_msgs/CompressedImage"):
+                if export_assets:
+                    topic_dir = os.path.join(out_dir, topic_name)
+                    kwargs.update({"export": True, "export_dir": topic_dir})
+
+            result = self.read_topic(topic, **kwargs)  # expects dict like {"df": df, ...}
+            df = result if not isinstance(result, tuple) else result[0]
+
+            if df_format == "csv":
+                df_path = os.path.join(out_dir, f"{topic_name}.csv")
+                df.to_csv(df_path, index=False)
+            else:
+                df_path = os.path.join(out_dir, f"{topic_name}.parquet")
+                df.to_parquet(df_path, index=False)
+
+
+        return out_dir
+
+
+
