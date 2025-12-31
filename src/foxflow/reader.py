@@ -6,6 +6,8 @@ import requests
 import os
 from tqdm import tqdm
 import shutil
+from functools import wraps
+
 
 from foxflow.parsers import load_plugins
 from foxflow.registry import get_parser, list_schemas
@@ -13,6 +15,17 @@ from foxflow.utils import get_timestamp_ns, _safe_topic_name
 from foxflow.parsers.generic import parse_generic
 
 
+
+def ensure_recording(fn):
+    @wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        if not all(hasattr(self, a) for a in ("recording_id", "device_id", "start", "end")):
+            raise RuntimeError(
+                "No recording selected. Call select_recording_by_id(...) or "
+                "select_recording_by_name(...) first."
+            )
+        return fn(self, *args, **kwargs)
+    return wrapper
 
 
 def iter_with_timestamp(message_iter):
@@ -99,7 +112,7 @@ class BagfileReader:
         except KeyError:
             return parse_generic
 
-    
+    @ensure_recording
     def read_topic(self, topic: str, **kwargs):
         """Return parsed data for a topic using the registered parser for its schema."""
         if topic not in self.mapping:
@@ -124,7 +137,7 @@ class BagfileReader:
 
         return values[0] if len(values) == 1 else values
 
-
+    @ensure_recording
     def read_events(self, topic: str, **kwargs):
         if topic not in self.mapping:
             raise ValueError(f"Topic '{topic}' not found in recording.")
@@ -160,11 +173,12 @@ class BagfileReader:
 
         return results
 
-
+    @ensure_recording
     def get_events(self):
         return self.client.get_events(device_id=self.device_id, start=self.start, end=self.end)
 
 
+    @ensure_recording
     def export_bagfile(
         self,
         out_dir: str,
@@ -233,4 +247,38 @@ class BagfileReader:
         return f"BagfileReader({', '.join(parts)})"
 
 
+    def get_event_overview(self) -> pd.DataFrame:
+        events = self.client.get_events(
+            device_id=self.device_id,
+            start=self.start,
+            end=self.end,
+        )
 
+        rows = []
+        for evt in events:
+            meta = evt.get("metadata") or {}
+            if not isinstance(meta, dict):
+                meta = {"metadata": meta}
+
+            start = evt.get("start")
+            end = evt.get("end")
+
+            duration_ns = None
+            if start is not None and end is not None:
+                # Handles datetime objects (aware or naive)
+                start_ns = pd.Timestamp(start).value
+                end_ns = pd.Timestamp(end).value
+                duration_s = (end_ns - start_ns) * 1e-9
+
+            row = {"event_id": evt.get("id"), "duration_s": duration_s}
+            row.update(meta)
+            rows.append(row)
+
+        df = pd.DataFrame(rows)
+
+        if df.empty:
+            return pd.DataFrame(columns=["event_id", "duration_s"])
+
+        core = ["event_id", "duration_s"]
+        meta_cols = sorted(c for c in df.columns if c not in core)
+        return df[core + meta_cols]
