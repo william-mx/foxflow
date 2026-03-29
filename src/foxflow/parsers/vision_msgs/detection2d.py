@@ -38,7 +38,7 @@ def parse_detection2d(message_iter, seq: int | None = None) -> dict:
     Returns:
         {
             "df": DataFrame with timestamp_ns, header_stamp_ns, frame_id — for sync,
-            "detections": list[Detection2DResult] — for working with the data,
+            "detections": list[list[Detection2DResult]] — one list per message,
         }
     """
     rows = []
@@ -51,13 +51,13 @@ def parse_detection2d(message_iter, seq: int | None = None) -> dict:
         )
 
         det = _parse_single_detection(ros_message, seq=seq, t_ns=t_ns)
-        detections.append(det)
 
         rows.append({
             "timestamp_ns": t_ns,
             "header_stamp_ns": header_stamp_ns,
             "frame_id": ros_message.header.frame_id,
         })
+        detections.append([det])
 
     return {
         "df": pd.DataFrame(rows),
@@ -71,7 +71,7 @@ def parse_detection2d_array(message_iter, seq: int | None = None) -> dict:
     Returns:
         {
             "df": DataFrame with timestamp_ns, header_stamp_ns, frame_id — one row per array message,
-            "detections": list[Detection2DResult] — all detections across all messages,
+            "detections": list[list[Detection2DResult]] — one list per message, N detections each,
         }
     """
     rows = []
@@ -89,9 +89,11 @@ def parse_detection2d_array(message_iter, seq: int | None = None) -> dict:
             "frame_id": ros_message.header.frame_id,
         })
 
-        for detection in ros_message.detections:
-            det = _parse_single_detection(detection, seq=seq, t_ns=t_ns)
-            detections.append(det)
+        frame_detections = [
+            _parse_single_detection(detection, seq=seq, t_ns=t_ns)
+            for detection in ros_message.detections
+        ]
+        detections.append(frame_detections)
 
     return {
         "df": pd.DataFrame(rows),
