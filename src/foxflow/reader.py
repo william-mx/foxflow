@@ -11,7 +11,7 @@ from functools import wraps
 
 from foxflow.parsers import load_plugins
 from foxflow.registry import get_parser, list_schemas
-from foxflow.utils import get_timestamp_ns, _safe_topic_name
+from foxflow.utils import get_timestamp_ns, _safe_topic_name, build_event_query
 from foxflow.parsers.generic import parse_generic
 
 
@@ -137,18 +137,34 @@ class BagfileReader:
 
         return values[0] if len(values) == 1 else values
 
+
     @ensure_recording
-    def read_events(self, topic: str, **kwargs):
+    def read_events(
+        self,
+        topic: str,
+        *,
+        event_keys: list[str] | None = None,
+        event_values: list | None = None,
+        event_pairs: dict | None = None,
+        **kwargs,
+    ):
         if topic not in self.mapping:
             raise ValueError(f"Topic '{topic}' not found in recording.")
 
         schema = self.mapping[topic].replace("/msg/", "/")
         parser = self._get_parser(schema)
 
+        query = build_event_query(
+            keys=event_keys,
+            values=event_values,
+            pairs=event_pairs,
+        )
+
         events = self.client.get_events(
             device_id=self.device_id,
             start=self.start,
             end=self.end,
+            query=query if query else None,
         )
 
         results = {}
@@ -163,19 +179,26 @@ class BagfileReader:
 
             messages_iter = iter_with_timestamp(raw_iter)
 
-            # parsed is ALWAYS a dict: {"df": df, ...}
             parsed = parser(messages_iter, **kwargs)
 
             results[evt["id"]] = {
                 "event": evt,
-                **parsed,   # ← THIS is the important part
+                **parsed,
             }
 
         return results
 
+
     @ensure_recording
-    def get_events(self):
-        return self.client.get_events(device_id=self.device_id, start=self.start, end=self.end)
+    def get_events(self, *,
+        event_keys: list[str] | None = None,
+        event_values: list | None = None,
+        event_pairs: dict | None = None,
+    ):
+        query = build_event_query(keys=event_keys, values=event_values, pairs=event_pairs)
+
+        return self.client.get_events(device_id=self.device_id, start=self.start,
+            end=self.end, query=query if query else None)
 
 
     @ensure_recording
@@ -263,7 +286,7 @@ class BagfileReader:
             start = evt.get("start")
             end = evt.get("end")
 
-            duration_ns = None
+            duration_s = None
             if start is not None and end is not None:
                 # Handles datetime objects (aware or naive)
                 start_ns = pd.Timestamp(start).value
