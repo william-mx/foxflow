@@ -22,7 +22,8 @@ dependencies = [
   "mcap-ros1-support",
   "duckdb",
   "opencv-python-headless",
-  "pyarrow"
+  "pyarrow",
+  "ros2_pydata"
 ]
 
 [project.optional-dependencies]
@@ -36,7 +37,8 @@ dev = [
   "jupyter",
   "notebook",
   "plotly",
-  "twine"
+  "twine",
+  "ros2_pydata"
 ]
 
 [tool.setuptools]
