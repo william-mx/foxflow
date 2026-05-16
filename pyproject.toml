@@ -12,6 +12,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "William Engel" }]
 dependencies = [
+  "scipy",
   "pandas",
   "numpy",
   "tqdm",
